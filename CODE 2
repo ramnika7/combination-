@@ -1,0 +1,60 @@
+
+import os
+import struct
+
+def analyze_png(file_path):
+    # Standard PNG magic bytes (signature)
+    PNG_SIGNATURE = b'\x89\x50\x4e\x47\x0d\x0a\x1a\x0a'
+    
+    if not os.path.exists(file_path):
+        print(f"Error: File '{file_path}' not found.")
+        return
+
+    print(f"\n[+] Checking file: {file_path}")
+    
+    with open(file_path, 'rb') as f:
+        content = f.read()
+
+    # 1. Verify Header
+    header = content[:8]
+    if header == PNG_SIGNATURE:
+        print("[+] PNG file header is valid.")
+    else:
+        print("[-] PNG file header is CORRUPT or incorrect!")
+
+    # 2. Parse Chunks
+    offset = 8
+    chunks = []
+    while offset < len(content):
+        if offset + 8 > len(content):
+            print("[-] Warning: File cut off unexpectedly.")
+            break
+        
+        # Read length and chunk type
+        length = struct.unpack('>I', content[offset:offset+4])[0]
+        chunk_type = content[offset+4:offset+8]
+        
+        chunk_data_start = offset + 8
+        chunk_data_end = chunk_data_start + length
+        crc_end = chunk_data_end + 4
+        
+        chunks.append((chunk_type, length, offset))
+        
+        print(f"    Found chunk: {chunk_type.decode('ascii', errors='ignore')} (Length: {length} bytes)")
+        
+        if chunk_type == b'IEND':
+            # IEND marks the official end of a PNG file
+            if crc_end < len(content):
+                extra_bytes = len(content) - crc_end
+                print(f"[!] Found {extra_bytes} extra bytes *after* the IEND chunk! (Potential hidden data/flag)")
+                
+                # Extract trailing data to check for hidden flags
+                trailing_data = content[crc_end:]
+                print(f"    Trailing Data Preview: {repr(trailing_data[:100])}")
+            break
+            
+        offset = crc_end
+
+if __name__ == "__main__":
+    target_file = input("Enter path to the PNG file: ").strip()
+    analyze_png(target_file)
